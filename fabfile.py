@@ -4,9 +4,13 @@ from fabric.operations import os, _AttributeString, _prefix_commands, _prefix_en
 from fabric.state import output, win32
 from fabric.utils import error
 
-#TODO: Check if virtualenv, project directory, or database already exists - then should we fail or just skip and continue?
+#TODO: Check if virtualenv, project directory, or database already exists - then we should prompt for skip/fail/quit
 #TODO: If the script fails should we rollback (delete) the virtualenv, project directory, and database?
+#TODO: We could test and fail gracefully for dependencies (virtualenvwrapper, pip, mysql)
 def new(virtual_env_name, project_name, app_name):
+    """
+    Sets up a new mezzanine-django project using virtualenvwrapper, mysql, and pip with an unfuddle repository
+    """
     with prefix("source ~/.bash_profile"):
         bash_local("mkvirtualenv %s" % virtual_env_name)
         bash_local("mkdir %s" % project_name)
@@ -16,6 +20,7 @@ def new(virtual_env_name, project_name, app_name):
                 bash_local("mezzanine-project %s" % project_name)
                 bash_local("sudo pip install south")
 
+                #TODO: This line makes assumptions that we're using macbooks, exporting the path may not break anything on other machines though
                 #Add mysql_config to the path temporarily so mysql-python installs correctly
                 with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
                     bash_local("sudo pip install mysql-python")
@@ -46,7 +51,7 @@ def new(virtual_env_name, project_name, app_name):
 #                        \"%s\",/g' settings.py > settings.py.tmp" % app_name)
 #                    bash_local("mv settings.py.tmp settings.py")
 
-                    #FIXME: assumes you're using root user and has no password
+                    #TODO: assumes you're using root user and has no password, we should prompt for this
                     with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
                         bash_local("mysqladmin -u root create %s" % virtual_env_name)
                     bash_local("./manage.py syncdb")
@@ -62,6 +67,7 @@ def new(virtual_env_name, project_name, app_name):
 
                     #TODO: Tie to Unfuddle?
 
+#TODO: If fabric updates the local() function we won't get the benefits unless we re-copy the function
 # This is a copy of fab's local() that uses bash instead of sh
 def bash_local(command, capture=False):
     """
