@@ -66,6 +66,29 @@ def new(virtual_env_name, project_name, app_name):
 
                     #TODO: Tie to Unfuddle?
 
+#TODO: project_name must be known from the git repository
+def clone(virtual_env_name, project_name):
+    """
+    Clones a new mezzanine-django project using virtualenvwrapper, mysql, and pip from an unfuddle git repository
+    """
+    with prefix("source ~/.bash_profile"):
+        bash_local("mkvirtualenv %s" % virtual_env_name)
+        bash_local("git clone git@yeti.unfuddle.com:yeti/%s.git" % project_name)
+        with lcd("%s" % project_name):
+            with prefix("workon %s" % virtual_env_name):
+                #TODO: This line makes assumptions that we're using macbooks, exporting the path may not break anything on other machines though
+                #Add mysql_config to the path temporarily so mysql-python installs correctly
+                with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
+                    bash_local("sudo pip install -r requirements/requirements.txt")
+
+                bash_local("cp local_settings.py.template local_settings.py")
+
+                #TODO: assumes you're using root user and has no password, we should prompt for this
+                with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
+                    bash_local("mysqladmin -u root create %s" % virtual_env_name)
+                bash_local("./manage.py syncdb")
+                bash_local("./manage.py migrate")
+
 #TODO: If fabric updates the local() function we won't get the benefits unless we re-copy the function
 # This is a copy of fab's local() that uses bash instead of sh
 def bash_local(command, capture=False):
