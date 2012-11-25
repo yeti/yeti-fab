@@ -36,20 +36,19 @@ def new(virtual_env_name, project_name, app_name):
                     bash_local("echo 'MEDIA_URL = \"http://127.0.0.1:8000/static/media/\"' >> local_settings.py")
                     bash_local("cp local_settings.py local_settings.py.template")
 
-
                     bash_local("chmod +x manage.py")
                     bash_local("pip freeze > requirements/requirements.txt")
                     bash_local("./manage.py startapp %s" % app_name)
                     #TODO: Add new app to installed_apps
                     #Issue is putting in a new line before the added text with sed
                     #Potentially could use awk instead
-#                    command = '''sed 's/INSTALLED_APPS = (/&\
-#                        "%s",/g' settings.py > settings.py.tmp
-#                    ''' % app_name
-#                    bash_local(command)
-#                    bash_local("sed 's/INSTALLED_APPS = (/&\
-#                        \"%s\",/g' settings.py > settings.py.tmp" % app_name)
-#                    bash_local("mv settings.py.tmp settings.py")
+                    #                    command = '''sed 's/INSTALLED_APPS = (/&\
+                    #                        "%s",/g' settings.py > settings.py.tmp
+                    #                    ''' % app_name
+                    #                    bash_local(command)
+                    #                    bash_local("sed 's/INSTALLED_APPS = (/&\
+                    #                        \"%s\",/g' settings.py > settings.py.tmp" % app_name)
+                    #                    bash_local("mv settings.py.tmp settings.py")
 
                     #TODO: assumes you're using root user and has no password, we should prompt for this
                     with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
@@ -57,7 +56,7 @@ def new(virtual_env_name, project_name, app_name):
                     bash_local("./manage.py syncdb")
 
                     #TODO: Put this back in once we figure out adding new app to installed_apps
-#                    bash_local("./manage schemamigration %s --initial" % app_name)
+                    #                    bash_local("./manage schemamigration %s --initial" % app_name)
                     bash_local("./manage.py migrate")
 
                     bash_local("git init")
@@ -66,6 +65,29 @@ def new(virtual_env_name, project_name, app_name):
                     bash_local("git commit -m'init'")
 
                     #TODO: Tie to Unfuddle?
+
+#TODO: project_name must be known from the git repository
+def clone(virtual_env_name, project_name):
+    """
+    Clones a new mezzanine-django project using virtualenvwrapper, mysql, and pip from an unfuddle git repository
+    """
+    with prefix("source ~/.bash_profile"):
+        bash_local("mkvirtualenv %s" % virtual_env_name)
+        bash_local("git clone git@yeti.unfuddle.com:yeti/%s.git" % project_name)
+        with lcd("%s" % project_name):
+            with prefix("workon %s" % virtual_env_name):
+                #TODO: This line makes assumptions that we're using macbooks, exporting the path may not break anything on other machines though
+                #Add mysql_config to the path temporarily so mysql-python installs correctly
+                with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
+                    bash_local("sudo pip install -r requirements/requirements.txt")
+
+                bash_local("cp local_settings.py.template local_settings.py")
+
+                #TODO: assumes you're using root user and has no password, we should prompt for this
+                with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
+                    bash_local("mysqladmin -u root create %s" % virtual_env_name)
+                bash_local("./manage.py syncdb")
+                bash_local("./manage.py migrate")
 
 #TODO: If fabric updates the local() function we won't get the benefits unless we re-copy the function
 # This is a copy of fab's local() that uses bash instead of sh
