@@ -7,7 +7,7 @@ from fabric.utils import error
 #TODO: Check if virtualenv, project directory, or database already exists - then we should prompt for skip/fail/quit
 #TODO: If the script fails should we rollback (delete) the virtualenv, project directory, and database?
 #TODO: We could test and fail gracefully for dependencies (virtualenvwrapper, pip, mysql)
-def new(virtual_env_name, project_name, app_name):
+def new(virtual_env_name, project_name, app_name, db_password=''):
     """
     Sets up a new mezzanine-django project using virtualenvwrapper, mysql, and pip with an unfuddle repository
     """
@@ -33,6 +33,8 @@ def new(virtual_env_name, project_name, app_name):
                     bash_local("mv local_settings.py.tmp local_settings.py")
                     bash_local("sed 's/\"USER\": \"\"/\"USER\": \"root\"/g' local_settings.py > local_settings.py.tmp")
                     bash_local("mv local_settings.py.tmp local_settings.py")
+                    bash_local("sed 's/\"PASSWORD\": \"\"/\"PASSWORD\": \""+ db_password + "\"/g' local_settings.py > local_settings.py.tmp")
+                    bash_local("mv local_settings.py.tmp local_settings.py")
                     bash_local("echo 'MEDIA_URL = \"http://127.0.0.1:8000/static/media/\"' >> local_settings.py")
                     bash_local("cp local_settings.py local_settings.py.template")
 
@@ -52,7 +54,10 @@ def new(virtual_env_name, project_name, app_name):
 
                     #TODO: assumes you're using root user and has no password, we should prompt for this
                     with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
-                        bash_local("mysqladmin -u root create %s" % virtual_env_name)
+                        if len(db_password) > 0:
+                            bash_local("mysqladmin -u root -password %s create %s" % (db_password, virtual_env_name))
+                        else:
+                            bash_local("mysqladmin -u root create %s" % virtual_env_name)
                     bash_local("./manage.py syncdb")
 
                     #TODO: Put this back in once we figure out adding new app to installed_apps
