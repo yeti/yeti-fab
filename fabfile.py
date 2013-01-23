@@ -55,7 +55,7 @@ def new(virtual_env_name, project_name, app_name, db_password=''):
                     #TODO: assumes you're using root user and has no password, we should prompt for this
                     with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
                         if len(db_password) > 0:
-                            bash_local("mysqladmin -u root -password %s create %s" % (db_password, virtual_env_name))
+                            bash_local("mysqladmin -u root --password=%s create %s" % (db_password, virtual_env_name))
                         else:
                             bash_local("mysqladmin -u root create %s" % virtual_env_name)
                     bash_local("./manage.py syncdb")
