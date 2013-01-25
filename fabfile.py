@@ -7,10 +7,20 @@ from fabric.utils import error
 #TODO: Check if virtualenv, project directory, or database already exists - then we should prompt for skip/fail/quit
 #TODO: If the script fails should we rollback (delete) the virtualenv, project directory, and database?
 #TODO: We could test and fail gracefully for dependencies (virtualenvwrapper, pip, mysql)
-def new(virtual_env_name, project_name, app_name, db_password=''):
+def new(virtual_env_name='', project_name='', app_name='', db_password=''):
     """
     Sets up a new mezzanine-django project using virtualenvwrapper, mysql, and pip with an unfuddle repository
     """
+    if len(virtual_env_name) == 0 or len(project_name) == 0 or len(app_name) == 0:
+        print "Usage: fab new:<virtual_env_name>,<project_name>,<app_name>[,<db_password>]"
+        print ""
+        print "Assumptions: db_username = 'root'"
+        print "             db_password = '' if <db_password> is not specified"
+        print ""
+        print "Common usage: <virtual_env_name> == <project_name>"
+        return
+
+
     with prefix("source ~/.bash_profile"):
         bash_local("mkvirtualenv %s" % virtual_env_name)
         bash_local("mkdir %s" % project_name)
