@@ -7,10 +7,20 @@ from fabric.utils import error
 #TODO: Check if virtualenv, project directory, or database already exists - then we should prompt for skip/fail/quit
 #TODO: If the script fails should we rollback (delete) the virtualenv, project directory, and database?
 #TODO: We could test and fail gracefully for dependencies (virtualenvwrapper, pip, mysql)
-def new(virtual_env_name, project_name, app_name):
+def new(virtual_env_name='', project_name='', app_name='', db_password=''):
     """
     Sets up a new mezzanine-django project using virtualenvwrapper, mysql, and pip with an unfuddle repository
     """
+    if len(virtual_env_name) == 0 or len(project_name) == 0 or len(app_name) == 0:
+        print "Usage: fab new:<virtual_env_name>,<project_name>,<app_name>[,<db_password>]"
+        print ""
+        print "Assumptions: db_username = 'root'"
+        print "             db_password = '' if <db_password> is not specified"
+        print ""
+        print "Common usage: <virtual_env_name> == <project_name>"
+        return
+
+
     with prefix("source ~/.bash_profile"):
         bash_local("mkvirtualenv %s" % virtual_env_name)
         bash_local("mkdir %s" % project_name)
@@ -33,6 +43,8 @@ def new(virtual_env_name, project_name, app_name):
                     bash_local("mv local_settings.py.tmp local_settings.py")
                     bash_local("sed 's/\"USER\": \"\"/\"USER\": \"root\"/g' local_settings.py > local_settings.py.tmp")
                     bash_local("mv local_settings.py.tmp local_settings.py")
+                    bash_local("sed 's/\"PASSWORD\": \"\"/\"PASSWORD\": \""+ db_password + "\"/g' local_settings.py > local_settings.py.tmp")
+                    bash_local("mv local_settings.py.tmp local_settings.py")
                     bash_local("echo 'MEDIA_URL = \"http://127.0.0.1:8000/static/media/\"' >> local_settings.py")
                     bash_local("cp local_settings.py local_settings.py.template")
 
@@ -42,21 +54,25 @@ def new(virtual_env_name, project_name, app_name):
                     #TODO: Add new app to installed_apps
                     #Issue is putting in a new line before the added text with sed
                     #Potentially could use awk instead
-#                    command = '''sed 's/INSTALLED_APPS = (/&\
-#                        "%s",/g' settings.py > settings.py.tmp
-#                    ''' % app_name
-#                    bash_local(command)
-#                    bash_local("sed 's/INSTALLED_APPS = (/&\
-#                        \"%s\",/g' settings.py > settings.py.tmp" % app_name)
-#                    bash_local("mv settings.py.tmp settings.py")
+
+                    #                    command = '''sed 's/INSTALLED_APPS = (/&\
+                    #                        "%s",/g' settings.py > settings.py.tmp
+                    #                    ''' % app_name
+                    #                    bash_local(command)
+                    #                    bash_local("sed 's/INSTALLED_APPS = (/&\
+                    #                        \"%s\",/g' settings.py > settings.py.tmp" % app_name)
+                    #                    bash_local("mv settings.py.tmp settings.py")
 
                     #TODO: assumes you're using root user and has no password, we should prompt for this
                     with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
-                        bash_local("mysqladmin -u root create %s" % virtual_env_name)
+                        if len(db_password) > 0:
+                            bash_local("mysqladmin -u root --password=%s create %s" % (db_password, virtual_env_name))
+                        else:
+                            bash_local("mysqladmin -u root create %s" % virtual_env_name)
                     bash_local("./manage.py syncdb")
 
                     #TODO: Put this back in once we figure out adding new app to installed_apps
-#                    bash_local("./manage schemamigration %s --initial" % app_name)
+                    #                    bash_local("./manage schemamigration %s --initial" % app_name)
                     bash_local("./manage.py migrate")
 
                     bash_local("git init")
