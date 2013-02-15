@@ -4,6 +4,20 @@ from fabric.operations import os, _AttributeString, _prefix_commands, _prefix_en
 from fabric.state import output, win32
 from fabric.utils import error
 
+def testdb(db_password=''):
+    with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
+        out = None
+
+        if len(db_password) > 0:
+            out = bash_local("mysqladmin --user=root --password=%s debug" % (db_password,))
+        else:
+            out = bash_local("mysqladmin --user=root debug")
+
+        if not out.succeeded:
+            print "The password you provided is invalid"
+
+        return out.succeeded
+
 #TODO: Check if virtualenv, project directory, or database already exists - then we should prompt for skip/fail/quit
 #TODO: If the script fails should we rollback (delete) the virtualenv, project directory, and database?
 #TODO: We could test and fail gracefully for dependencies (virtualenvwrapper, pip, mysql)
@@ -16,10 +30,13 @@ def new(virtual_env_name='', project_name='', app_name='', db_password=''):
         print ""
         print "Assumptions: db_username = 'root'"
         print "             db_password = '' if <db_password> is not specified"
+        print "             db_password is for the local user only"
         print ""
         print "Common usage: <virtual_env_name> == <project_name>"
         return
 
+    if not testdb(db_password):
+        return 
 
     with prefix("source ~/.bash_profile"):
         bash_local("mkvirtualenv %s" % virtual_env_name)
@@ -43,10 +60,12 @@ def new(virtual_env_name='', project_name='', app_name='', db_password=''):
                     bash_local("mv local_settings.py.tmp local_settings.py")
                     bash_local("sed 's/\"USER\": \"\"/\"USER\": \"root\"/g' local_settings.py > local_settings.py.tmp")
                     bash_local("mv local_settings.py.tmp local_settings.py")
-                    bash_local("sed 's/\"PASSWORD\": \"\"/\"PASSWORD\": \""+ db_password + "\"/g' local_settings.py > local_settings.py.tmp")
-                    bash_local("mv local_settings.py.tmp local_settings.py")
                     bash_local("echo 'MEDIA_URL = \"http://127.0.0.1:8000/static/media/\"' >> local_settings.py")
                     bash_local("cp local_settings.py local_settings.py.template")
+
+                    # modify the password after creating the template file, we don't check in the password as the template (each user has different settings)
+                    bash_local("sed 's/\"PASSWORD\": \"\"/\"PASSWORD\": \""+ db_password + "\"/g' local_settings.py > local_settings.py.tmp")
+                    bash_local("mv local_settings.py.tmp local_settings.py")
 
                     bash_local("chmod +x manage.py")
                     bash_local("pip freeze > requirements/requirements.txt")
@@ -83,10 +102,23 @@ def new(virtual_env_name='', project_name='', app_name='', db_password=''):
                     #TODO: Tie to Unfuddle?
 
 #TODO: project_name must be known from the git repository
-def clone(virtual_env_name, project_name):
+def clone(virtual_env_name="", project_name="", db_password=""):
     """
     Clones a new mezzanine-django project using virtualenvwrapper, mysql, and pip from an unfuddle git repository
     """
+    if len(virtual_env_name) == 0 or len(project_name) == 0:
+        print "Usage: fab clone:<virtual_env_name>,<project_name>[,<db_password>]"
+        print ""
+        print "Assumptions: db_username = 'root'"
+        print "             db_password = '' if <db_password> is not specified"
+        print "             db_password is for the local user only"
+        print ""
+        print "Common usage: <virtual_env_name> == <project_name>"
+        return
+
+    if not testdb(db_password):
+        return 
+
     with prefix("source ~/.bash_profile"):
         bash_local("mkvirtualenv %s" % virtual_env_name)
         bash_local("git clone git@yeti.unfuddle.com:yeti/%s.git" % project_name)
@@ -99,11 +131,21 @@ def clone(virtual_env_name, project_name):
 
                 bash_local("cp local_settings.py.template local_settings.py")
 
+                # modify the password after creating the template file, we don't check in the password as the template (each user has different settings)
+                bash_local("sed 's/\"PASSWORD\": \"\"/\"PASSWORD\": \""+ db_password + "\"/g' local_settings.py > local_settings.py.tmp")
+                bash_local("mv local_settings.py.tmp local_settings.py")
+
+
                 #TODO: assumes you're using root user and has no password, we should prompt for this
                 with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
-                    bash_local("mysqladmin -u root create %s" % virtual_env_name)
+                    if len(db_password) > 0:
+                        bash_local("mysqladmin -u root --password=%s create %s" % (db_password, virtual_env_name))
+                    else:
+                        bash_local("mysqladmin -u root create %s" % virtual_env_name)
+
                 bash_local("./manage.py syncdb")
                 bash_local("./manage.py migrate")
+
 
 #TODO: If fabric updates the local() function we won't get the benefits unless we re-copy the function
 # This is a copy of fab's local() that uses bash instead of sh
