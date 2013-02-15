@@ -5,6 +5,9 @@ from fabric.state import output, win32
 from fabric.utils import error
 
 def testdb(db_password=''):
+    """
+    Test that the password is valid for the user 'root' on the local computer.
+    """
     with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
         out = None
 
