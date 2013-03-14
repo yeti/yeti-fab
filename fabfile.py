@@ -1,16 +1,68 @@
 import subprocess
-from fabric.context_managers import prefix, lcd
-from fabric.operations import os, _AttributeString, _prefix_commands, _prefix_env_vars
+from fabric.context_managers import prefix, lcd, settings
+from fabric.operations import os, _AttributeString, _prefix_commands, _prefix_env_vars, prompt
 from fabric.state import output, win32
 from fabric.utils import error
+from os.path import exists
+from fabric.colors import *
+
+class Helper:
+    def add_line_to_list(self, read_file, write_file, list, insert_line):
+        f = open(read_file, "r")
+        g = open(write_file, "w")
+
+        state = 0 
+        # 0 - beginning of file
+        # 1 - inside the list
+        # 2 - after the list
+
+        line = f.readline()
+        while len(line) > 0: # a zero-length line defines end of file
+            if state == 0:
+                if line.find(list) == 0: # identified the start list
+                    state = 1
+            elif state == 1:
+                if line.find(")") == 0: # identified the end list
+                    # add in the inserted line here
+                    g.write("%s\n" % insert_line)
+                    state = 2
+
+            # write the line as is
+            g.write(line)
+
+            # read the next line
+            line = f.readline()
+
+        g.close()
+        f.close()
+
 
 def testdb(db_password=''):
     """
     Test that the password is valid for the user 'root' on the local computer.
     """
+
+    # guard against space in password
+    if db_password.find(" ") >= 0:
+        print "This script doesn't work when passwords contain spaces."
+        return None
+
+    # guard against script injection
+    if db_password.find("\n") >= 0:
+        print "Stopping, prevent script injection in password."
+        return None
+
     with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
         out = None
 
+        # verify that the mysqladmin tool is installed correctly
+        out = bash_local("mysqladmin --version")
+
+        if not out.succeeded:
+            print "You need to install mysql before running this script"
+            return None
+
+        # test the password is valid
         if len(db_password) > 0:
             out = bash_local("mysqladmin --user=root --password=%s debug" % (db_password,))
         else:
@@ -18,6 +70,7 @@ def testdb(db_password=''):
 
         if not out.succeeded:
             print "The password you provided is invalid"
+            return None
 
         return out.succeeded
 
@@ -35,11 +88,26 @@ def new(virtual_env_name='', project_name='', app_name='', db_password=''):
         print "             db_password = '' if <db_password> is not specified"
         print "             db_password is for the local user only"
         print ""
-        print "Common usage: <virtual_env_name> == <project_name>"
+        print "Common usage:"
+        print "            <virtual_env_name> == <project_name>"
+        print "            <project_name> should be different than <app_name>"
         return
 
+    # ensure the database has been set up correctly
     if not testdb(db_password):
-        return 
+        return
+
+    # check to make sure that the environment name and project name are the same
+    if virtual_env_name != project_name:
+        question = prompt("Usually the virtual environment (virtualenv) name should be the same as the project_name. Do you want to continue this script (Y/[N])?",validate="^[YyNn]?$")
+        if not (question == 'y' or question == 'Y'):
+            return
+
+    # ensure that project_name and app_name are different
+    if project_name == app_name:
+        question = prompt("Your app_name is the same as the project_name. They should be different. Continue? (Y/[N])?",validate="^[YyNn]?$")
+        if not (question == 'y' or question == 'Y'):
+            return
 
     with prefix("source ~/.bash_profile"):
         bash_local("mkvirtualenv %s" % virtual_env_name)
@@ -84,6 +152,12 @@ def new(virtual_env_name='', project_name='', app_name='', db_password=''):
                     #                    bash_local("sed 's/INSTALLED_APPS = (/&\
                     #                        \"%s\",/g' settings.py > settings.py.tmp" % app_name)
                     #                    bash_local("mv settings.py.tmp settings.py")
+
+                    # let's access the settings file, output.succeeded should contain the working directory
+                    output = bash_local("pwd", capture=True)
+                    h = Helper()
+                    h.add_line_to_list(output + "/settings.py", output + "/settings.py.tmp", "INSTALLED_APPS = (", '    "%s",' % app_name)
+                    bash_local("mv settings.py.tmp settings.py")                        
 
                     #TODO: assumes you're using root user and has no password, we should prompt for this
                     with prefix('export PATH="$PATH:/usr/local/mysql/bin/"'):
@@ -148,6 +222,79 @@ def clone(virtual_env_name="", project_name="", db_password=""):
 
                 bash_local("./manage.py syncdb")
                 bash_local("./manage.py migrate")
+
+
+def remove(virtual_env_name, project_name="", db_password=""):
+    """
+    Remove an existing project on your computer. 
+    WARNING: This script will not back up your source code before deletion.
+
+    Usage:
+        remove:<project_name> where project_name is the same as the virtual_env_name
+        remove:<virtual_env_name>,<project_name>
+        remove:<virtual_env_name>,<project_name>,<db_password>
+    """
+
+    if len(project_name) == 0:
+        project_name = virtual_env_name
+
+    with prefix("source ~/.bash_profile"):
+        # check to see if the virtual env has been fully removed, not removed because of compiled stuff
+        bash_local("rmvirtualenv %s" % virtual_env_name)
+        workon_home = os.getenv('WORKON_HOME')
+        
+        if exists("%s/%s" % (workon_home, virtual_env_name)):
+            bash_local("sudo rm -rf %s/%s" % (workon_home, virtual_env_name))
+
+        # remove the source code directory
+        if exists("%s/%s/.git" % (project_name, project_name)):
+            question = prompt("Do you want to remove the local copy of `%s` (Y/[N])?" % project_name,validate="^[YyNn]?$")
+            if not (question == 'y' or question == 'Y'):
+                return
+
+            bash_local("rm -rf %s/%s/.git" % (project_name,project_name))
+            bash_local("rm -r %s" % project_name)
+        elif exists("%s/.git" % project_name):
+            question = prompt("Do you want to remove the local copy of `%s` (Y/[N])?" % project_name,validate="^[YyNn]?$")
+            if not (question == 'y' or question == 'Y'):
+                return
+
+            bash_local("rm -rf %s/.git" % project_name)
+            bash_local("rm -r %s" % project_name)
+        elif exists("%s" % project_name):
+            question = prompt("Do you want to remove the only copy of `%s` from your computer (Y/[N])?" % project_name,validate="^[YyNn]?$")
+            if not (question == 'y' or question == 'Y'):
+                return
+            
+            bash_local("rm -r %s" % project_name)
+
+        # check for the database
+        if not testdb(db_password):
+            return
+
+        # don't remove the database but tell the user
+        with settings(warn_only=True):
+            if len(db_password):
+                cmd = "mysql -u root --password=%s -e 'use %s'" % (db_password,project_name)
+            else:
+                cmd = "mysql -u root -e 'use %s'" % project_name
+            output = bash_local(cmd)
+
+            # don't actually remove the database for now
+            if output.succeeded:
+                print yellow("Your database still exists. You should remove it manually by calling\n removedb:%s,<db_password>" % project_name)
+
+def removedb(project_name, db_password=""):
+    """
+    Remove an existing database from your computer that corresponds to a project.
+    """
+
+    with prefix("source ~/.bash_profile"):
+        if len(db_password):
+            cmd = "mysqladmin -u root --password=%s drop %s" % (db_password,project_name)
+        else:
+            cmd = "mysqladmin -u root drop %s" % project_name
+        output = bash_local(cmd)
 
 
 #TODO: If fabric updates the local() function we won't get the benefits unless we re-copy the function
