@@ -19,6 +19,13 @@ You will need the following configured before using yeti-fab:
 * MySQL
 * git
 
+Installation
+------------
+
+Fabric must be installed in order to run the script:
+
+        `pip install fabric`
+
 Commands
 --------
 

@@ -36,6 +36,57 @@ class Helper:
         g.close()
         f.close()
 
+def homebrew():
+    """
+    Installs homebrew
+    """
+    bash_local('ruby -e "$(curl -fsSkL raw.github.com/mxcl/homebrew/go)"')
+
+def rabbitmq():
+    """
+    Installs rabbitmq, requires homebrew
+    """
+    bash_local("brew update")
+    bash_local("brew doctor")
+    bash_local("brew install rabbitmq")
+
+    with open("/etc/paths","r") as f:
+        file = f.read()
+        f.close()
+        if file.find("/usr/local/sbin") != -1:
+            bash_local("sudo echo /usr/local/sbin >> /etc/paths")
+
+
+    print("To start rabbitmq: rabbitmq-server")
+
+def addrabbit(user, password, virtualhost):
+    """
+    Adds a rabbit user, assumes that rabbitmq is installed
+    """
+    bash_local("sudo rabbitmqctl add_user %s %s" % (user, password))
+    bash_local("sudo rabbitmqctl add_vhost %s" % virtualhost)
+    bash_local('sudo rabbitmqctl set_permissions -p %s %s ".*" ".*" ".*"' % (virtualhost, user))
+
+def removerabbit(user, virtualhost):
+    """
+    Removes a rabbit user
+    """
+    bash_local("sudo rabbitmqctl delete_user %s" % user)
+    bash_local("sudo rabbitmqctl delete_vhost %s" % virtualhost)
+
+def rabbitmonitor(enable,user=""):
+    """
+    Enables rabbitmq monitoring, optionally taking a username to enable for the control panel
+    """
+    if enable=="yes" or enable=="on":
+        bash_local("rabbitmq-plugins enable rabbitmq_management")
+        if len(user):
+            bash_local("sudo rabbitmqctl set_user_tags %s administrator" % user)
+        print "Running on http://localhost:15672"
+    else:
+        bash_local("rabbitmq-plugins disable rabbitmq_management")
+        if len(user):
+            bash_local("sudo rabbitmqctl set_user_tags %s" % user)
 
 def testdb(db_password=''):
     """
