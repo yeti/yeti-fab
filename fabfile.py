@@ -36,12 +36,6 @@ class Helper:
         g.close()
         f.close()
 
-def homebrew():
-    """
-    Installs homebrew
-    """
-    bash_local('ruby -e "$(curl -fsSkL raw.github.com/mxcl/homebrew/go)"')
-
 def rabbitmq():
     """
     Installs rabbitmq, requires homebrew
